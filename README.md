@@ -451,7 +451,9 @@ does not permit that profile to be attached.
 
 If SSH login is not needed, create `EC2_SSH_PUBLIC_KEY` with an empty value or
 leave it absent. Port 22 is still opened by the requested security-group rule,
-but no EC2 key pair is attached.
+but no EC2 key pair is attached. Terraform also permits the AWS-managed EC2
+Instance Connect prefix list so the console's browser-based connection can
+reach port 22.
 
 Sandbox credentials normally expire when the lab ends. At the start of every
 new sandbox session, replace these three GitHub secrets before rerunning:

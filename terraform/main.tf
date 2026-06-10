@@ -26,6 +26,10 @@ data "aws_subnets" "default" {
   }
 }
 
+data "aws_ec2_managed_prefix_list" "instance_connect" {
+  name = "com.amazonaws.${var.aws_region}.ec2-instance-connect"
+}
+
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -79,11 +83,19 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
-    description = "SSH"
+    description = "Direct SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.ssh_allowed_cidr]
+  }
+
+  ingress {
+    description     = "Browser-based EC2 Instance Connect"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.instance_connect.id]
   }
 
   egress {
