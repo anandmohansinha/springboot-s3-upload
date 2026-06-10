@@ -65,11 +65,23 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
+      - name: Remove legacy IAM resources from Terraform state
+        working-directory: terraform
+        run: |
+          for resource in \
+            aws_iam_role_policy.ec2 \
+            aws_iam_instance_profile.ec2 \
+            aws_iam_role.ec2
+          do
+            terraform state rm "$resource" || true
+          done
+
       # ECR must exist before Docker can push the image on the first deployment.
       - name: Create ECR repository
         working-directory: terraform
         env:
           TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_ec2_instance_profile_name: ${{ secrets.EC2_INSTANCE_PROFILE_NAME }}
           TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
           TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
           TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
@@ -100,6 +112,7 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_ec2_instance_profile_name: ${{ secrets.EC2_INSTANCE_PROFILE_NAME }}
           TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
           TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
           TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
@@ -111,6 +124,7 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_ec2_instance_profile_name: ${{ secrets.EC2_INSTANCE_PROFILE_NAME }}
           TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
           TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
           TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}

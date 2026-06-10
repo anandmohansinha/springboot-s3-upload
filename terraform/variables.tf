@@ -34,6 +34,16 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
+variable "ec2_instance_profile_name" {
+  description = "Name of an existing sandbox IAM instance profile that EC2 is allowed to use."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.ec2_instance_profile_name)) > 0
+    error_message = "ec2_instance_profile_name must not be empty."
+  }
+}
+
 variable "application_port" {
   description = "Spring Boot application port."
   type        = number

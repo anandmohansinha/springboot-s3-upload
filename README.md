@@ -167,11 +167,10 @@ The Terraform configuration creates:
 - A private ECR repository named `springboot-demo`
 - An Amazon Linux 2023 EC2 instance in the default VPC
 - A security group allowing inbound TCP port `8080`
-- An EC2 IAM role and instance profile
-- ECR image-pull permissions
-- S3 `PutObject` and `GetObject` permissions for an existing private bucket
+- An EC2 instance that uses an existing sandbox IAM instance profile
 
-EC2 User Data installs Docker, authenticates to ECR through the instance role,
+The existing sandbox role must already allow ECR image pulls plus S3
+`PutObject` and `GetObject`. EC2 User Data installs Docker, authenticates to ECR through the instance role,
 pulls `springboot-demo:latest`, and starts the container. No AWS access keys are
 stored in Terraform, the Docker image, or the EC2 instance.
 
@@ -397,6 +396,7 @@ Create these secrets:
 | `AWS_SESSION_TOKEN` | Yes | Complete temporary sandbox session token |
 | `TF_STATE_BUCKET` | Yes | Existing S3 bucket used for Terraform state |
 | `S3_BUCKET_NAME` | Yes | Existing private bucket used by the application |
+| `EC2_INSTANCE_PROFILE_NAME` | Yes | Existing sandbox instance profile, such as `LabInstanceProfile` |
 | `APP_ALLOWED_CIDR` | Yes | Source allowed on port 8080, such as `0.0.0.0/0` |
 | `SSH_ALLOWED_CIDR` | Yes | Source allowed on port 22, preferably `YOUR_IP/32` |
 | `EC2_SSH_PUBLIC_KEY` | No | Contents of an OpenSSH `.pub` key |
@@ -404,6 +404,50 @@ Create these secrets:
 The AWS region is fixed to `us-east-1` in the workflow, so `AWS_REGION` does
 not need to be a secret. Docker Hub secrets are also not needed because this
 project uses Amazon ECR.
+
+### Find the sandbox instance profile
+
+Use AWS CloudShell or a terminal configured with the sandbox credentials:
+
+```bash
+aws iam list-instance-profiles \
+  --query 'InstanceProfiles[].{Profile:InstanceProfileName,Roles:Roles[].RoleName}' \
+  --output table
+```
+
+Example:
+
+```text
+------------------------------------------------
+|             ListInstanceProfiles             |
++----------------------+-----------------------+
+| Profile              | Roles                 |
++----------------------+-----------------------+
+| LabInstanceProfile   | LabRole               |
++----------------------+-----------------------+
+```
+
+Create the GitHub secret using the **Profile** value:
+
+```text
+EC2_INSTANCE_PROFILE_NAME = LabInstanceProfile
+```
+
+Do not automatically use the role name `LabRole` unless the instance profile
+also has that exact name. EC2 accepts an instance profile name, not a role name.
+
+If `iam:ListInstanceProfiles` is blocked, open:
+
+```text
+EC2 -> Launch instance -> Advanced details -> IAM instance profile
+```
+
+Use one of the profile names available in that dropdown and cancel the manual
+instance launch.
+
+The GitHub Actions identity must have permission to pass the role contained in
+that profile to EC2. If the next error mentions `iam:PassRole`, the sandbox
+does not permit that profile to be attached.
 
 If SSH login is not needed, create `EC2_SSH_PUBLIC_KEY` with an empty value or
 leave it absent. Port 22 is still opened by the requested security-group rule,
@@ -463,11 +507,11 @@ the ECR repository, IAM resources, security group, and Terraform state.
 
 ### Sandbox limitations
 
-The temporary sandbox identity must be allowed to create IAM roles, instance
-profiles, ECR repositories, EC2 instances, key pairs, and security groups. If
-the workflow returns `AccessDenied`, the sandbox provider has blocked one of
-those operations and its permissions must be adjusted or the restricted
-resource must be created manually.
+The temporary sandbox identity must be allowed to create ECR repositories, EC2
+instances, optional key pairs, and security groups. It must also have
+`iam:PassRole` permission for the selected existing instance profile. If the
+workflow returns `AccessDenied`, the sandbox provider has blocked one of those
+operations.
 
 Because Terraform state is stored in S3, do not delete the state object before
 running `terraform destroy`. To destroy from your computer using the same

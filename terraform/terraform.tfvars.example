@@ -1,4 +1,5 @@
 s3_bucket_name = "your-existing-private-s3-bucket"
+ec2_instance_profile_name = "LabInstanceProfile"
 
 # For a quick sandbox test, 0.0.0.0/0 is simple but publicly exposes port 8080.
 # Prefer your public IP in CIDR form when possible, for example "203.0.113.10/32".
