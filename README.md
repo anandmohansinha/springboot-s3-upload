@@ -211,7 +211,7 @@ current PowerShell window:
 $env:AWS_ACCESS_KEY_ID = "YOUR_TEMP_ACCESS_KEY"
 $env:AWS_SECRET_ACCESS_KEY = "YOUR_TEMP_SECRET_KEY"
 $env:AWS_SESSION_TOKEN = "YOUR_TEMP_SESSION_TOKEN"
-$env:AWS_REGION = "ap-south-1"
+$env:AWS_REGION = "us-east-1"
 
 aws sts get-caller-identity
 ```
@@ -231,7 +231,7 @@ s3_bucket_name = "your-existing-private-s3-bucket"
 allowed_cidr   = "0.0.0.0/0"
 ```
 
-The bucket must be in `ap-south-1` because the application signs S3 requests
+The bucket must be in `us-east-1` because the application signs S3 requests
 for that region.
 
 `0.0.0.0/0` is convenient for a short sandbox test but exposes port `8080`
@@ -242,10 +242,10 @@ publicly. Use your public IP with `/32` when possible.
 ECR must exist before Docker can push the image. Bootstrap only that resource:
 
 ```powershell
-terraform -chdir=terraform init `
+terraform -chdir=terraform init -reconfigure `
   -backend-config="bucket=YOUR_STATE_BUCKET" `
   -backend-config="key=springboot-demo/terraform.tfstate" `
-  -backend-config="region=ap-south-1" `
+  -backend-config="region=us-east-1" `
   -backend-config="encrypt=true"
 
 terraform -chdir=terraform apply -target=aws_ecr_repository.app
@@ -267,7 +267,7 @@ docker run --rm -p 8080:8080 `
   -e AWS_ACCESS_KEY_ID=$env:AWS_ACCESS_KEY_ID `
   -e AWS_SECRET_ACCESS_KEY=$env:AWS_SECRET_ACCESS_KEY `
   -e AWS_SESSION_TOKEN=$env:AWS_SESSION_TOKEN `
-  -e AWS_REGION=ap-south-1 `
+  -e AWS_REGION=us-east-1 `
   -e AWS_S3_BUCKET=your-existing-private-s3-bucket `
   springboot-demo:latest
 ```
@@ -281,7 +281,7 @@ EC2 deployment does not pass them because the container uses the instance role.
 $ecrRepository = terraform -chdir=terraform output -raw ecr_repository_url
 $ecrRegistry = $ecrRepository.Split("/")[0]
 
-aws ecr get-login-password --region ap-south-1 |
+aws ecr get-login-password --region us-east-1 |
   docker login --username AWS --password-stdin $ecrRegistry
 
 docker tag springboot-demo:latest "${ecrRepository}:latest"
@@ -401,7 +401,7 @@ Create these secrets:
 | `SSH_ALLOWED_CIDR` | Yes | Source allowed on port 22, preferably `YOUR_IP/32` |
 | `EC2_SSH_PUBLIC_KEY` | No | Contents of an OpenSSH `.pub` key |
 
-The AWS region is fixed to `ap-south-1` in the workflow, so `AWS_REGION` does
+The AWS region is fixed to `us-east-1` in the workflow, so `AWS_REGION` does
 not need to be a secret. Docker Hub secrets are also not needed because this
 project uses Amazon ECR.
 
@@ -474,10 +474,10 @@ running `terraform destroy`. To destroy from your computer using the same
 state:
 
 ```powershell
-terraform -chdir=terraform init `
+terraform -chdir=terraform init -reconfigure `
   -backend-config="bucket=YOUR_STATE_BUCKET" `
   -backend-config="key=springboot-demo/terraform.tfstate" `
-  -backend-config="region=ap-south-1" `
+  -backend-config="region=us-east-1" `
   -backend-config="encrypt=true"
 
 $env:TF_VAR_s3_bucket_name = "YOUR_APPLICATION_BUCKET"

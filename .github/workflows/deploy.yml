@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: us-east-1
   ECR_REPOSITORY: springboot-demo
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
@@ -59,7 +59,7 @@ jobs:
       - name: Terraform init
         working-directory: terraform
         run: |
-          terraform init \
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=springboot-demo/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
