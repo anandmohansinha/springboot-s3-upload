@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:your-private-bucket-name}
+    region: ${AWS_REGION:us-east-1}
+    upload-url-expiration: 15m
+    download-url-expiration: 5m
+

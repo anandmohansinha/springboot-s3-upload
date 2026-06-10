@@ -1,0 +1,133 @@
+name: Build and deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: springboot-demo-deployment
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: springboot-demo
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  deploy:
+    name: Build, push, and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build Spring Boot JAR
+        run: mvn --batch-mode clean package
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS account
+        run: aws sts get-caller-identity
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.4
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=springboot-demo/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      # ECR must exist before Docker can push the image on the first deployment.
+      - name: Create ECR repository
+        working-directory: terraform
+        env:
+          TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
+          TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
+          TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
+          TF_VAR_image_tag: ${{ github.sha }}
+          TF_VAR_deployment_id: ${{ github.run_id }}
+        run: terraform apply -auto-approve -target=aws_ecr_repository.app
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 \
+            -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest" .
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+
+      - name: Terraform format check
+        working-directory: terraform
+        run: terraform fmt -check
+
+      - name: Terraform plan
+        working-directory: terraform
+        env:
+          TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
+          TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
+          TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
+          TF_VAR_image_tag: ${{ github.sha }}
+          TF_VAR_deployment_id: ${{ github.run_id }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform apply
+        working-directory: terraform
+        env:
+          TF_VAR_s3_bucket_name: ${{ secrets.S3_BUCKET_NAME }}
+          TF_VAR_allowed_cidr: ${{ secrets.APP_ALLOWED_CIDR }}
+          TF_VAR_ssh_allowed_cidr: ${{ secrets.SSH_ALLOWED_CIDR }}
+          TF_VAR_ssh_public_key: ${{ secrets.EC2_SSH_PUBLIC_KEY }}
+          TF_VAR_image_tag: ${{ github.sha }}
+          TF_VAR_deployment_id: ${{ github.run_id }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Show deployment outputs
+        working-directory: terraform
+        run: |
+          EC2_IP="$(terraform output -raw ec2_public_ip)"
+          APP_URL="$(terraform output -raw application_url)"
+          echo "EC2 public IP: ${EC2_IP}"
+          echo "Application URL: ${APP_URL}"
+          {
+            echo "## Deployment complete"
+            echo ""
+            echo "- EC2 public IP: \`${EC2_IP}\`"
+            echo "- Application URL: ${APP_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"

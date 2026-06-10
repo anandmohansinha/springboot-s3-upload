@@ -1,0 +1,9 @@
+target/
+.idea/
+*.iml
+.vscode/
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+!terraform/terraform.tfvars.example

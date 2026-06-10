@@ -1,0 +1,8 @@
+.git
+.gitignore
+.idea
+.vscode
+terraform
+target/*
+!target/aws-s3-presigned-upload-0.0.1-SNAPSHOT.jar
+
